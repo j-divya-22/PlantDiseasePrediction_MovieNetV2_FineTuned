@@ -329,30 +329,30 @@ st.write(
     "disease category and its top three predictions."
 )
 
-st.expander(
-"⚠️ Supported Plants & Disclaimer",
-expanded=True
+
+with st.expander(
+    "⚠️ Supported Plants & Disclaimer",
+    expanded=True
 ):
-st.markdown("""
-Supported plants (14):
+    st.markdown("""
+    **Supported plants (14):**
 
-Apple, Blueberry, Cherry, Corn (Maize), Grape,
-Orange, Peach, Bell Pepper, Potato, Raspberry,
-Soybean, Squash, Strawberry, and Tomato.
+    Apple, Blueberry, Cherry, Corn (Maize), Grape,
+    Orange, Peach, Bell Pepper, Potato, Raspberry,
+    Soybean, Squash, Strawberry, and Tomato.
 
-Important disclaimer:
+    **Important disclaimer:**
 
-This model was trained on the PlantVillage dataset
-and recognizes 38 trained plant and leaf-condition
-categories only. It may give incorrect predictions
-for unsupported plants, diseases, or real-world
-images that differ from the training data.
+    This model was trained on the PlantVillage dataset
+    and recognizes only its 38 trained categories.
+    Predictions for unsupported plants, diseases, or
+    unfamiliar real-world images may be incorrect.
 
-The confidence score does not guarantee correctness.
-This application is intended for educational purposes
-and is not a substitute for professional agricultural
-advice.
-""")
+    The confidence score does not guarantee correctness.
+    This application is intended for educational purposes
+    and is not a substitute for professional agricultural advice.
+    """)
+
 
 st.info(
     "This application recognizes the 38 categories included in "
