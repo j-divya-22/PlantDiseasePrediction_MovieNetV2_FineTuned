@@ -422,6 +422,33 @@ st.info(
     "guaranteed diagnosis."
 )
 
+with st.expander(
+    "📥 AI Assistant Setup — Required Model Files",
+    expanded=False
+):
+    st.markdown("""
+    **The AI Plant Disease Assistant requires two additional model files.**
+
+    These files are not included in this GitHub repository because
+    of their large file sizes.
+
+    **Setup instructions:**
+
+    1. Open the provided Google Colab notebook.
+    2. Run the notebook and download both model files.
+    3. Place both downloaded files inside the project's `models` folder.
+
+    **Required filenames:**
+
+    - `Qwen3-4B-Q4_K_M.gguf`
+    - `plant_disease_adapter.gguf`
+
+    **Important:** Both files are required for the fine-tuned AI
+    Plant Disease Assistant to work.
+
+    The CNN-based plant disease prediction feature uses a separate
+    model and can work independently.
+    """)
 
 # --------------------------------------------------
 # 3. LOAD THE TRAINED MODEL AND CLASS NAMES
