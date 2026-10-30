@@ -2,4 +2,4 @@ streamlit
 tensorflow
 numpy
 Pillow
-
+llama-cpp-python
