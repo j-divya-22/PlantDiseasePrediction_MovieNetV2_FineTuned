@@ -1,5 +1,6 @@
 
 import json
+import re
 from html import escape
 from pathlib import Path
 from textwrap import dedent
@@ -8,6 +9,7 @@ import numpy as np
 import streamlit as st
 import tensorflow as tf
 from PIL import Image, ImageOps
+from utils.llm_response import generate_disease_explanation
 
 
 # --------------------------------------------------
@@ -18,8 +20,53 @@ PROJECT_DIR = Path(__file__).resolve().parent
 
 MODEL_PATH = PROJECT_DIR / "models" / "mobilenetv2_plant_disease.keras"
 CLASS_NAMES_PATH = PROJECT_DIR / "dataset" / "class_names.json"
+KNOWLEDGE_PATH = (
+    PROJECT_DIR / "knowledge" / "class_knowledge_cards.json"
+)
 
 IMAGE_SIZE = (224, 224)
+DISEASE_SECTION_TITLES = (
+    "Disease Overview",
+    "Cause and Pathogen",
+    "Symptoms",
+    "Favorable Conditions",
+    "Spread",
+    "Management and Prevention",
+)
+
+
+def parse_disease_sections(explanation):
+    title_pattern = "|".join(
+        re.escape(title) for title in DISEASE_SECTION_TITLES
+    )
+    heading_pattern = re.compile(
+        rf"^[ \t]*(?:#{{1,6}}[ \t]*)?(?:\*\*)?"
+        rf"(?:\d+[.)][ \t]*)?(?:\*\*)?({title_pattern})"
+        rf"(?:\*\*)?[ \t]*:?[ \t]*",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    headings = list(heading_pattern.finditer(explanation))
+    sections = []
+
+    for index, heading in enumerate(headings):
+        body_end = (
+            headings[index + 1].start()
+            if index + 1 < len(headings)
+            else len(explanation)
+        )
+        title = next(
+            title
+            for title in DISEASE_SECTION_TITLES
+            if title.casefold() == heading.group(1).casefold()
+        )
+        sections.append((title, explanation[heading.end():body_end].strip()))
+
+    if tuple(title for title, _ in sections) != DISEASE_SECTION_TITLES:
+        raise ValueError(
+            "The AI explanation did not contain all six sections in order."
+        )
+
+    return sections
 
 
 # --------------------------------------------------
@@ -147,6 +194,21 @@ st.markdown(
         background: linear-gradient(135deg, rgba(28, 67, 39, 0.96), rgba(15, 42, 27, 0.98));
         box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
         animation: result-card-enter 1s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        margin: 0.8rem 0;
+        border: 1px solid rgba(185, 239, 138, 0.32);
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(28, 67, 39, 0.82), rgba(15, 42, 27, 0.9));
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] h4 {
+        margin: 0.15rem 0 0.4rem;
+        color: #b9ef8a;
+        font-size: 1.15rem;
+        font-weight: 750;
     }
 
     .result-eyebrow, .top-three-eyebrow {
@@ -435,6 +497,71 @@ def format_class_name(class_name):
 
 
 # --------------------------------------------------
+# LOAD AND MATCH PLANT DISEASE KNOWLEDGE CARDS
+# --------------------------------------------------
+
+@st.cache_data
+def load_knowledge_cards():
+    if not KNOWLEDGE_PATH.exists():
+        raise FileNotFoundError(
+            f"Knowledge cards not found: {KNOWLEDGE_PATH}"
+        )
+
+    with open(KNOWLEDGE_PATH, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def normalize_class_name(name):
+    return "".join(
+        character.lower()
+        for character in str(name)
+        if character.isalnum()
+    )
+
+
+def find_knowledge_card(data, target_class):
+    target = normalize_class_name(target_class)
+
+    if isinstance(data, dict):
+
+        # Direct dictionary lookup
+        for key, value in data.items():
+            if normalize_class_name(key) == target:
+                return value
+
+        # Search records containing a class/disease identifier
+        identifier_fields = (
+            "class_name",
+            "class",
+            "label",
+            "disease",
+            "disease_name",
+            "name",
+            "category",
+        )
+
+        for field in identifier_fields:
+            for key, value in data.items():
+                if key.lower() == field and normalize_class_name(value) == target:
+                    return data
+
+        # Search nested dictionaries
+        for value in data.values():
+            result = find_knowledge_card(value, target_class)
+            if result is not None:
+                return result
+
+    elif isinstance(data, list):
+
+        for item in data:
+            result = find_knowledge_card(item, target_class)
+            if result is not None:
+                return result
+
+    return None
+
+
+# --------------------------------------------------
 # 5. IMAGE UPLOAD
 # --------------------------------------------------
 
@@ -527,6 +654,50 @@ if uploaded_file is not None:
                 + "</section>",
                 unsafe_allow_html=True,
             )
+                        # --------------------------------------------------
+            # 7. FINE-TUNED LLM DISEASE EXPLANATION
+            # --------------------------------------------------
+
+            st.subheader("🌱 AI Plant Disease Assistant")
+
+            try:
+                knowledge_data = load_knowledge_cards()
+
+                knowledge_card = find_knowledge_card(
+                    knowledge_data,
+                    best_class
+                )
+
+                if knowledge_card is None:
+                    st.warning(
+                        "No matching knowledge card was found "
+                        f"for {format_class_name(best_class)}."
+                    )
+
+                else:
+                    knowledge_text = json.dumps(
+                        knowledge_card,
+                        ensure_ascii=False,
+                        indent=2
+                    )
+
+                    with st.spinner(
+                        "Generating disease explanation with your fine-tuned AI model..."
+                    ):
+                        explanation = generate_disease_explanation(
+                            best_class,
+                            knowledge_text
+                        )
+
+                    for title, section_text in parse_disease_sections(explanation):
+                        with st.container(border=True):
+                            st.markdown(f"#### {title}:")
+                            st.markdown(section_text)
+
+            except Exception as error:
+                st.error(
+                    f"Could not generate the AI explanation: {error}"
+                )
 
             st.divider()
 
